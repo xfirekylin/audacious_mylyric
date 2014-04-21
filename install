@@ -1,7 +1,7 @@
 #!/bin/sh 
-if [ -f "/usr/local/lib/audacious/General/mylyric.so" ]
+if [ -f "/usr/lib/x86_64-linux-gun/audacious/General/mylyric.so" ]
 then
-    rm /usr/local/lib/audacious/General/mylyric.so && echo "删除文件mylyric.so"
+    rm /usr/lib/x86_64-linux-gnu/audacious/General/mylyric.so && echo "删除文件mylyric.so"
 fi
 
-cp mylyric.so /usr/local/lib/audacious/General/mylyric.so && echo "复制文件mylyric.so到目标"
+cp mylyric.so /usr/lib/x86_64-linux-gnu/audacious/General/mylyric.so && echo "复制文件mylyric.so到目标"

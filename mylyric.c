@@ -279,149 +279,6 @@ static void cleanup(void)
     signal(SIGCHLD, SIG_DFL);
 }
 
-static void save_and_close(gchar * cmd, gchar * cmd_after, gchar * cmd_end, gchar * cmd_ttc)
-{
-	char *lyric_pos, *new_font, *fore_color, *back_color;
-        char focus_color[20]={0};
-	GdkColor color;
-        static char cur_forecolor[20];
-        static char cur_backcolor[20];
-        static char cur_focuscolor[20];
-
-	lyric_pos = g_strdup(gtk_entry_get_text(GTK_ENTRY(pos_entry)));
-	new_font = g_strdup(gtk_font_button_get_font_name(GTK_FONT_BUTTON(font_btn)));
-
-        //if (data != w)
-        {
-	        gtk_color_button_get_color(GTK_COLOR_BUTTON(fore_color_btn), &color);
-	        fore_color = (char *)malloc(20*sizeof(char));
-	        memset(fore_color, 10*sizeof(char), 0);
-	        sprintf(fore_color, "#%02x%02x%02x",color.red, color.green, color.blue);
-                DEBUG_TRACE("\n#%02x%02x%02x",color.red, color.green, color.blue);
-            
-	        gtk_color_button_get_color(GTK_COLOR_BUTTON(back_color_btn), &color);
-	        back_color = (char *)malloc(20*sizeof(char));
-	        memset(back_color, 10*sizeof(char), 0);
-	        sprintf(back_color, "#%02x%02x%02x",color.red, color.green, color.blue);
-                DEBUG_TRACE("\ncolor=#%02x%02x%02x",color.red, color.green, color.blue);
-            
-                gtk_color_button_get_color(GTK_COLOR_BUTTON(focus_color_btn), &color);
-	        sprintf(focus_color, "#%02x%02x%02x",color.red, color.green, color.blue);
-                DEBUG_TRACE("\ncolor=#%02x%02x%02x",color.red, color.green, color.blue);
-        }
-#if 0
-	aud_set_string("my_lyric", "lyric_position", lyric_pos);
-
-	aud_set_string("my_lyric", "lyric_font", new_font);
-
-	aud_set_string("my_lyric", "lyric_forecolor", fore_color);
-
-	aud_set_string("my_lyric", "lyric_backcolor", back_color);
-    aud_set_string("my_lyric", "lyric_focuscolor",focus_color);
-#endif
-
-	if (lyric_position != NULL)
-		g_free(lyric_position);
-
-	lyric_position = g_strdup(lyric_pos);
-
-	if (lyric_font != NULL)
-		g_free(lyric_font);
-
-	lyric_font = g_strdup(new_font);
-
-	if (lyric_forecolor != NULL)
-		g_free(lyric_forecolor);
-
-	lyric_forecolor = g_strdup(fore_color);
-
-	if (lyric_backcolor != NULL)
-		g_free(lyric_backcolor);
-
-	lyric_backcolor = g_strdup(back_color);
-
-        if (lyric_focuscolor != NULL)
-		g_free(lyric_focuscolor);
-
-	lyric_focuscolor = g_strdup(focus_color);
-
-        if (0 != strcmp(cur_font, lyric_font) && NULL != textview)
-	{
-                PangoFontDescription *font;
-
-                font = pango_font_description_from_string (lyric_font);
-                strcpy(cur_font, lyric_font);
-                gtk_widget_modify_font(textview, font);
-	}
-
-        if (0 == strlen(cur_forecolor))
-        {
-                strcpy(cur_forecolor, lyric_forecolor);
-        }
-        if (0 == strlen(cur_backcolor))
-        {
-                strcpy(cur_backcolor, lyric_backcolor);
-        }
-        if (0 == strlen(cur_focuscolor))
-        {
-                strcpy(cur_focuscolor, lyric_focuscolor);
-        }
-
-        if (0 != strcmp(cur_forecolor, lyric_forecolor) && NULL != textview)
-	{
-                strcpy(cur_forecolor, lyric_forecolor);
-                gdk_color_parse(lyric_forecolor,&color);
-                gtk_widget_modify_text(textview,GTK_STATE_NORMAL,&color);
-	}
-
-        if (0 != strcmp(cur_focuscolor, lyric_focuscolor) && NULL != textview)
-	{
-                GtkTextIter start,end;
-                GtkTextTagTable *tagtable;
-                GtkTextTag *tag;
-
-                buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (textview));
-                strcpy(cur_focuscolor, lyric_focuscolor);
-                
-
-		
-                tagtable = gtk_text_buffer_get_tag_table(buffer);
-                tag = gtk_text_tag_table_lookup(tagtable,"forecolors");
-        
-                if (NULL != pre_time && pre_time->len > 2)
-	        {//
-                        DEBUG_TRACE("\nchange focus color ok");
-		        gtk_text_buffer_get_iter_at_line (buffer,&start,pre_time->line-1);
-		        gtk_text_buffer_get_iter_at_line_index (buffer,&end,pre_time->line-1,pre_time->len-1);
-		        gtk_text_buffer_remove_tag_by_name (buffer,"forecolors",&start,&end);
-                        gtk_text_tag_table_remove(tagtable,tag);
-                        gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
-                        gtk_text_buffer_apply_tag_by_name (buffer,"forecolors",&start,&end);
-                }  
-                else
-                {      
-                        gtk_text_tag_table_remove(tagtable,tag);
-                        gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
-	        }
-                
-                
-	}
-	
-	if (0 != strcmp(cur_backcolor, lyric_backcolor) && NULL != textview && NULL != layout)
-	{
-                strcpy(cur_backcolor, lyric_backcolor);
-                gdk_color_parse(lyric_backcolor,&color);
-                gtk_widget_modify_bg(layout,GTK_STATE_NORMAL,&color);
-                gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
-	}
-	
-
-        g_free(lyric_pos);
-        g_free(new_font);
-        free(fore_color);
-        free(back_color);
-}
-
 static int check_command(char *command)
 {
     const char *dangerous = "fns";
@@ -448,10 +305,7 @@ static void applet_save_and_close(GtkWidget *w, gpointer data)
         static char cur_focuscolor[20];
 
 
-
-	
-
-        //if (0 != strcmp(cur_font, lyric_font) && NULL != textview)
+    if (0 != strcmp(cur_font, lyric_font) && NULL != textview)
 	{
                 PangoFontDescription *font;
 
@@ -460,27 +314,15 @@ static void applet_save_and_close(GtkWidget *w, gpointer data)
                 gtk_widget_modify_font(textview, font);
 	}
 
-        //if (0 == strlen(cur_forecolor))
-        {
-                strcpy(cur_forecolor, lyric_forecolor);
-        }
-        if (0 == strlen(cur_backcolor))
-        {
-                strcpy(cur_backcolor, lyric_backcolor);
-        }
-        //if (0 == strlen(cur_focuscolor))
-        {
-                strcpy(cur_focuscolor, lyric_focuscolor);
-        }
 
-        //if (0 != strcmp(cur_forecolor, lyric_forecolor) && NULL != textview)
+    if (0 != strcmp(cur_forecolor, lyric_forecolor) && NULL != textview)
 	{
                 strcpy(cur_forecolor, lyric_forecolor);
                 gdk_color_parse(lyric_forecolor,&color);
-                gtk_widget_modify_text(textview,GTK_STATE_NORMAL,&color);
+                gtk_widget_modify_fg(textview,GTK_STATE_NORMAL,&color);
 	}
 
-        if (0 != strcmp(cur_focuscolor, lyric_focuscolor) && NULL != textview)
+    if (0 != strcmp(cur_focuscolor, lyric_focuscolor) && NULL != textview)
 	{
                 GtkTextIter start,end;
                 GtkTextTagTable *tagtable;
@@ -488,18 +330,16 @@ static void applet_save_and_close(GtkWidget *w, gpointer data)
 
                 buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (textview));
                 strcpy(cur_focuscolor, lyric_focuscolor);
-                
 
-		
                 tagtable = gtk_text_buffer_get_tag_table(buffer);
                 tag = gtk_text_tag_table_lookup(tagtable,"forecolors");
         
                 if (NULL != pre_time && pre_time->len > 2)
-	        {//
+	           {//
                         DEBUG_TRACE("\nchange focus color ok");
-		        gtk_text_buffer_get_iter_at_line (buffer,&start,pre_time->line-1);
-		        gtk_text_buffer_get_iter_at_line_index (buffer,&end,pre_time->line-1,pre_time->len-1);
-		        gtk_text_buffer_remove_tag_by_name (buffer,"forecolors",&start,&end);
+						gtk_text_buffer_get_iter_at_line (buffer,&start,pre_time->line-1);
+						gtk_text_buffer_get_iter_at_line_index (buffer,&end,pre_time->line-1,pre_time->len-1);
+						gtk_text_buffer_remove_tag_by_name (buffer,"forecolors",&start,&end);
                         gtk_text_tag_table_remove(tagtable,tag);
                         gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
                         gtk_text_buffer_apply_tag_by_name (buffer,"forecolors",&start,&end);
@@ -508,17 +348,16 @@ static void applet_save_and_close(GtkWidget *w, gpointer data)
                 {      
                         gtk_text_tag_table_remove(tagtable,tag);
                         gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
-	        }
-                
-                
-	}
+                }
+ 	}
 	
 	if (0 != strcmp(cur_backcolor, lyric_backcolor) && NULL != textview && NULL != layout)
 	{
                 strcpy(cur_backcolor, lyric_backcolor);
                 gdk_color_parse(lyric_backcolor,&color);
+                gtk_widget_modify_bg(textview,GTK_STATE_NORMAL,&color);
                 gtk_widget_modify_bg(layout,GTK_STATE_NORMAL,&color);
-                gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
+                //gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
 	}
 	
 }
@@ -803,12 +642,9 @@ gboolean ScrollLyric(gpointer data)
 	GtkRequisition requisition;
 	GtkTextIter start,end;
 
-    
-	
 	
 	gtk_window_get_size(GTK_WINDOW(window),&x,&y);
 	gtk_widget_size_request(textview,&requisition);
-
 
 	if (auto_resize && !user_resize)
 	{
@@ -939,7 +775,7 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 
     current_file = aud_playlist_entry_get_filename (playlist, pos);
 
-        DEBUG_TRACE("\n\ ============================play begin=====================n");
+        DEBUG_TRACE("\n============================play begin=====================n");
 	closetimer(NULL,NULL);
 
 
@@ -1042,9 +878,7 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	    argv[1] = artist  ;
 	    argv[2] = title;
 	    download_lrc(2, (char **)argv);
-	    
-	    //sprintf(lrcname,"mv *.lrc %s/",lyric_position);
-	    //system(lrcname);
+
 	}
 	
 	if (NULL == fp)
@@ -1053,6 +887,10 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 		if (find_lrc(lyric_position,newname, lrcname))
 		{
 		   fp =fopen(lrcname,"r");
+
+		   	memset(lrcname, 0, sizeof(lrcname));
+		    //sprintf(lrcname,"mv *.lrc %s/",lyric_position);
+		    //system(lrcname);
 		}
 	}
 	
@@ -1135,19 +973,17 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	}
 
 	gdk_color_parse(lyric_forecolor,&color);
-	gtk_widget_modify_text(textview,GTK_STATE_NORMAL,&color);
+	gtk_widget_modify_fg(textview,GTK_STATE_NORMAL,&color);
 	gdk_color_parse(lyric_backcolor,&color);
+	gtk_widget_modify_bg(textview,GTK_STATE_NORMAL,&color);
 	gtk_widget_modify_bg(layout,GTK_STATE_NORMAL,&color);
-	/*gtk_widget_modify_bg(layout,GTK_STATE_ACTIVE,&color);
-	gtk_widget_modify_bg(layout,GTK_STATE_PRELIGHT,&color);
-	gtk_widget_modify_bg(layout,GTK_STATE_SELECTED,&color);
-	gtk_widget_modify_bg(layout,GTK_STATE_INSENSITIVE,&color);*/
-	gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
+	//gtk_widget_modify_bg(layout,GTK_STATE_ACTIVE,&color);
+	//gtk_widget_modify_bg(layout,GTK_STATE_PRELIGHT,&color);
+	//gtk_widget_modify_bg(layout,GTK_STATE_SELECTED,&color);
+	//gtk_widget_modify_bg(layout,GTK_STATE_INSENSITIVE,&color);
+	//gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
 	gtk_text_buffer_set_text (buffer, lrc_after_parse, -1);
 	
-	
-
-
 	font = pango_font_description_from_string (lyric_font);
 	strcpy(cur_font, lyric_font);
 	gtk_widget_modify_font (textview, font);
@@ -1160,8 +996,8 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	gtk_text_view_set_pixels_inside_wrap (GTK_TEXT_VIEW (textview), 5);
 	gtk_text_view_set_left_margin (GTK_TEXT_VIEW (textview), 10);
 	gtk_text_view_set_right_margin (GTK_TEXT_VIEW (textview), 10);
-	gtk_text_buffer_create_tag (buffer, "back","background","#00ff00", NULL);
-	DEBUG_TRACE("\n==================forecolors %s====\n",lyric_focuscolor);
+
+	gtk_text_buffer_create_tag (buffer, "back","background",lyric_backcolor, NULL);
 	gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
 
 
@@ -1201,7 +1037,7 @@ static void mylyric_playback_end(gpointer unused, gpointer unused2)
 
     current_file = aud_playlist_entry_get_filename (playlist, pos);
 
-        DEBUG_TRACE("\n\ ============================play end=====================n");
+        DEBUG_TRACE("\n ============================play end=====================n");
 
 	//do_command(lyric_font, current_file, pos);
 
@@ -1259,6 +1095,81 @@ static void configure_ok_cb()
     DEBUG_TRACE("lyric_focuscolor:%s\n",lyric_focuscolor);
 }
 
+static void forecolor_set_cb (GtkWidget * chooser)
+{
+	GdkColor color;
+    gtk_color_button_get_color ((GtkColorButton *) chooser, & color);
+
+    if (NULL != lyric_forecolor)
+    {
+    	g_free(lyric_forecolor);
+    }
+    lyric_forecolor = gdk_color_to_string(&color);
+}
+
+static void * mylyric_get_forecolor_chooser (void)
+{
+	GdkColor color;
+
+	gdk_color_parse(config.lyric_forecolor,&color);
+
+    GtkWidget * chooser = gtk_color_button_new_with_color (& color);
+
+    g_signal_connect (chooser, "color-set", (GCallback) forecolor_set_cb, NULL);
+
+    return chooser;
+}
+
+static void focuscolor_set_cb (GtkWidget * chooser)
+{
+	GdkColor color;
+    gtk_color_button_get_color ((GtkColorButton *) chooser, & color);
+
+    if (NULL != lyric_focuscolor)
+    {
+    	g_free(lyric_focuscolor);
+    }
+    lyric_focuscolor = gdk_color_to_string(&color);
+}
+
+static void * mylyric_get_focuscolor_chooser (void)
+{
+	GdkColor color;
+
+	gdk_color_parse(config.lyric_focuscolor,&color);
+
+    GtkWidget * chooser = gtk_color_button_new_with_color (& color);
+
+    g_signal_connect (chooser, "color-set", (GCallback) focuscolor_set_cb, NULL);
+
+    return chooser;
+}
+
+static void backcolor_set_cb (GtkWidget * chooser)
+{
+	GdkColor color;
+    gtk_color_button_get_color ((GtkColorButton *) chooser, & color);
+
+    if (NULL != lyric_backcolor)
+    {
+    	g_free(lyric_backcolor);
+    }
+    lyric_backcolor = gdk_color_to_string(&color);
+}
+
+static void * mylyric_get_backcolor_chooser (void)
+{
+	GdkColor color;
+
+	gdk_color_parse(config.lyric_backcolor,&color);
+
+    GtkWidget * chooser = gtk_color_button_new_with_color (& color);
+
+    g_signal_connect (chooser, "color-set", (GCallback) backcolor_set_cb, NULL);
+
+    return chooser;
+}
+
 static const PreferencesWidget elements[] = {
     {WIDGET_LABEL, N_("歌词存放位置:"),
         .data = {.label = {.single_line = TRUE}}},
@@ -1268,22 +1179,20 @@ static const PreferencesWidget elements[] = {
 
     {WIDGET_LABEL, N_("字体:"),
         .data = {.label = {.single_line = TRUE}}},
-    {WIDGET_ENTRY, N_(" "), .cfg_type = VALUE_STRING,
+    {WIDGET_FONT_BTN, N_(" "), .cfg_type = VALUE_STRING,
         .cfg = & config.lyric_font, .callback = configure_ok_cb},
     {WIDGET_SEPARATOR, .data = {.separator = {TRUE}}},
 
     {WIDGET_LABEL, N_("正常歌词颜色:"), .data = {.label = {.single_line = TRUE}}},
-    {WIDGET_ENTRY, N_(" "), .cfg_type = VALUE_STRING,
-        .cfg = & config.lyric_forecolor, .callback = configure_ok_cb},
+    {WIDGET_CUSTOM, .data = {.populate = mylyric_get_forecolor_chooser}},
     {WIDGET_SEPARATOR, .data = {.separator = {TRUE}}},
 
     {WIDGET_LABEL, N_("播放歌词颜色:"), .data = {.label = {.single_line = TRUE}}},
-    {WIDGET_ENTRY, N_(" "), .cfg_type = VALUE_STRING,
-        .cfg = & config.lyric_focuscolor, .callback = configure_ok_cb},
+    {WIDGET_CUSTOM, .data = {.populate = mylyric_get_focuscolor_chooser}},
+    {WIDGET_SEPARATOR, .data = {.separator = {TRUE}}},
 
     {WIDGET_LABEL, N_("歌词背景颜色:"), .data = {.label = {.single_line = TRUE}}},
-    {WIDGET_ENTRY, N_(" "), .cfg_type = VALUE_STRING,
-        .cfg = & config.lyric_backcolor, .callback = configure_ok_cb},
+    {WIDGET_CUSTOM, .data = {.populate = mylyric_get_backcolor_chooser}},
 };
 
 static const PreferencesWidget settings[] = {
@@ -1317,6 +1226,8 @@ static void configure_cleanup(void)
 
     DEBUG_TRACE("\n===============configure_cleanup=================\n");
     save_config();
+
+	applet_save_and_close(NULL, NULL);
 }
 
 static const PluginPreferences preferences = {
