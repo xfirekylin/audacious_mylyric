@@ -1,7 +1,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "utility.h"
+
 #define LINUS_OS
+#define test
 
 #ifdef WIN_OS
 #pragma   comment(lib, "Ws2_32.lib")
@@ -80,6 +83,7 @@ int download_by_http(char *url, char *msgbody, char *filename)
 	FILE *fp=NULL;	
 
 
+	DEBUG_TRACE("\n==url=%s,msg=%s,name=%s",url, msgbody,filename);
 	#ifdef WIN_OS
 	{
 		WSADATA	WsaData;

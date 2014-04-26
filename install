@@ -1,5 +1,5 @@
 #!/bin/sh 
-if [ -f "/usr/lib/x86_64-linux-gun/audacious/General/mylyric.so" ]
+if [ ! -s "/usr/lib/x86_64-linux-gun/audacious/General/mylyric.so" ]
 then
     rm /usr/lib/x86_64-linux-gnu/audacious/General/mylyric.so && echo "删除文件mylyric.so"
 fi

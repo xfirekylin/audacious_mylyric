@@ -14,7 +14,8 @@
 #include <unistd.h>
 #include   <wchar.h>  
 #include   <iconv.h> 
-
+#include <string.h>
+#include <stdlib.h>
 
 #define __DEBUG__
 #ifdef __DEBUG__  
@@ -33,4 +34,4 @@ void remove_str_blank(char *buf);
 void savefile(char *file, int length, char *filename);
 void unicodetostr(wchar_t *from, char *to, char hightolow);
 void urlencode(const char *from, char *to);
-int convert(char *from);
+size_t convert(char *from_charset,char *to_charset,char *inbuf,size_t inlen,char *outbuf,size_t outlen);

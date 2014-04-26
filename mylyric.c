@@ -117,6 +117,29 @@ static gchar *escape_shell_chars(const gchar * string)
     return escaped;
 }
 
+void mylyric_mv_lrc_file(char *name)
+{
+	if (NULL == name || NULL == lyric_position)
+	{
+		return;
+	}
+
+	size_t len = strlen(name) + strlen(lyric_position) + 10;
+	char *cmd_str = malloc(len);
+
+	if (NULL == cmd_str)
+	{
+		return;
+	}
+
+	memset(cmd_str, 0, len);
+	sprintf(cmd_str,"mv \"%s\" %s/", name, lyric_position);
+
+	DEBUG_TRACE("\ncmd_str=%s",cmd_str);
+	system(cmd_str);
+	free(cmd_str);
+}
+
 static void bury_child(int signal)
 {
     waitpid(-1, NULL, WNOHANG);
@@ -367,9 +390,72 @@ void closeApp ( GtkWidget *window, gpointer data)
 
 }
 
+void mylyric_free_time_list(void)
+{
+	Time_List * cur_time_list = lrc_time_list;
+
+	while (NULL != cur_time_list)
+	{
+		lrc_time_list = cur_time_list->next;
+		free(cur_time_list);
+		cur_time_list = lrc_time_list;
+	}
+}
+
+void mylyric_set_one_line_lrc_content(char *lrc)
+{
+	gint time,x,y;
+	GtkRequisition requisition;
+	GtkTextIter start,end;
+
+
+	if (NULL == buffer || NULL == lrc)
+	{
+		return;
+	}
+
+	mylyric_free_time_list();
+
+	gtk_text_buffer_set_text (buffer, lrc, -1);
+
+	gtk_window_get_size(GTK_WINDOW(window),&x,&y);
+	gtk_widget_size_request(textview,&requisition);
+	gtk_window_resize(GTK_WINDOW(window),requisition.width,y);
+	gtk_layout_move(GTK_LAYOUT(layout),textview, lrcpos_left, y/2);
+}
+
+void mylyric_show_window(void)
+{
+	GdkColor color;
+	PangoFontDescription *font;
+
+	gdk_color_parse(lyric_forecolor,&color);
+	gtk_widget_modify_fg(textview,GTK_STATE_NORMAL,&color);
+	gdk_color_parse(lyric_backcolor,&color);
+	gtk_widget_modify_bg(textview,GTK_STATE_NORMAL,&color);
+	gtk_widget_modify_bg(layout,GTK_STATE_NORMAL,&color);
+
+	font = pango_font_description_from_string (lyric_font);
+	strcpy(cur_font, lyric_font);
+	gtk_widget_modify_font (textview, font);
+
+	gtk_text_view_set_justification (GTK_TEXT_VIEW (textview), GTK_JUSTIFY_CENTER);
+	gtk_text_view_set_editable (GTK_TEXT_VIEW (textview), FALSE);
+	gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW (textview), FALSE);
+	gtk_text_view_set_pixels_above_lines (GTK_TEXT_VIEW (textview), 5);
+	gtk_text_view_set_pixels_below_lines (GTK_TEXT_VIEW (textview), 5);
+	gtk_text_view_set_pixels_inside_wrap (GTK_TEXT_VIEW (textview), 5);
+	gtk_text_view_set_left_margin (GTK_TEXT_VIEW (textview), 10);
+	gtk_text_view_set_right_margin (GTK_TEXT_VIEW (textview), 10);
+
+	gtk_text_buffer_create_tag (buffer, "back","background",lyric_backcolor, NULL);
+	gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
+
+	gtk_widget_show_all(window);
+}
+
 static gboolean init (void)
 {
-
     read_config();
 
     hook_associate("playback begin", mylyric_playback_begin, NULL);
@@ -389,11 +475,11 @@ static gboolean init (void)
 	gtk_container_add (GTK_CONTAINER (layout), textview);
 //	gtk_container_add (GTK_CONTAINER (scrolled_win), layout);
 	gtk_container_add (GTK_CONTAINER (window), layout);
-	g_signal_connect ( GTK_OBJECT (window), "destroy",
-			GTK_SIGNAL_FUNC ( closeApp), NULL);
+	g_signal_connect ( GTK_OBJECT (window), "destroy",GTK_SIGNAL_FUNC ( closeApp), NULL);
 	g_signal_connect(GTK_OBJECT(window),"destroy", GTK_SIGNAL_FUNC(closetimer),NULL);
 	g_signal_connect(GTK_OBJECT(window),"drag-end", G_CALLBACK(resize_lrc_win),NULL);//configure-event expose-event	
 	applet_save_and_close(NULL, NULL);
+	mylyric_show_window();
 
 	DEBUG_TRACE("\n=======init======\n");
     return TRUE;
@@ -750,7 +836,7 @@ gboolean ScrollLyric(gpointer data)
 	return 1;
 }
 
-static void mylyric_playback_begin(gpointer unused, gpointer unused2)
+ void mylyric_play_lrc(gpointer unused, gpointer unused2)
 {
 	int pos;
 	char *current_file;
@@ -759,16 +845,15 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	char newname[255] = {0};
 	char lrcname[255] ={0};
 	int i=0;
-	int file_len;
+	size_t file_len;
 	GtkTextMark *mark;
 	GtkTextIter iter;
 	const gchar *text;
 	char *mylrc;
 	char *lrc_after_parse;
-	GdkColor color;
 	gint x,y;
 	GtkRequisition requisition;
-	PangoFontDescription *font;
+
 
     int playlist = aud_playlist_get_playing ();
     pos = aud_playlist_get_position (playlist);
@@ -838,55 +923,13 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	}
 	
 	strcpy(newname, lrcname);
-	if (NULL == fp)
-	{
-	    //auto download lrc
-	    char *argv[3];
-	    char artist[100]={0},title[255]={0};
-	    temp = lrcname + strlen(lrcname) - 1;
-	    
-	    while ('/' != *temp && '-' != *temp)
-	        temp--;
-	        
-	    if ('-' == *temp)
-	    {
-	        strcpy(title, temp+1);
-	        *temp = '\0';
-	        
-	        while ('/' != *temp)
-	        temp--;
-	        
-	        strcpy(artist, temp+1);
-	        
-	        printf("\ntitle=%s,artist=%s\n",title,artist);
-	        temp = title + strlen(title) - 4;
-	        *temp = '\0'; //remove ".lrc"
-	        
-	        remove_str_blank(title);
-	        remove_str_blank(artist);
-	          printf("\ntitle=%s,artist=%s\n",title,artist);
-	    }
-	    else
-	    {
-	        strcpy(title, temp+1);
-	        temp = title + strlen(title) - 4;
-	        *temp = '\0'; //remove ".lrc"
-	        
-	        remove_str_blank(title);
-	    }
-	    argv[0] = "download_lrc";
-	    argv[1] = artist  ;
-	    argv[2] = title;
-	    download_lrc(2, (char **)argv);
-
-	}
 	
 	if (NULL == fp)
 	{
 		printf("error open lrc file=%s",newname);
 		if (find_lrc(lyric_position,newname, lrcname))
 		{
-		   fp =fopen(lrcname,"r");
+		    fp =fopen(lrcname,"r");
 
 		   	memset(lrcname, 0, sizeof(lrcname));
 		    //sprintf(lrcname,"mv *.lrc %s/",lyric_position);
@@ -920,37 +963,18 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	setbuf(stdout,NULL);
 
 	mylrc = lrc_content;
-	//gtk_text_buffer_set_text (buffer, file_name, -1);
-	//mark = gtk_text_buffer_get_insert (buffer);
-	//gtk_text_buffer_get_iter_at_mark (buffer, &iter, mark);
-	//gtk_text_buffer_insert (buffer, &iter, temp, -1);
-	iconv_t d = iconv_open("UTF-8","GB18030");
-	size_t j=4000;
-	//file_len = 55;
-	char *plrc2 = lrc2;
-	if (d==(iconv_t)-1)
-	{
-		DEBUG_TRACE("\niconv open error");
-	}
-	memset(lrc2,0,4000);
-	if ((size_t)-1 == iconv(d,&mylrc,&file_len,&plrc2,&j))
-			DEBUG_TRACE("iconv convert error");
-	iconv_close(d);
-	i=0;
-	//while(i<15)
-	//{
-	//	DEBUG_TRACE("%2x   ",(unsigned char)lrc2[i]);i++;
-	//}
-	//DEBUG_TRACE("%s",lrc2);
-	DEBUG_TRACE("\n before parse lrc");
-	cur_time_list = lrc_time_list;
 
-	while (NULL != cur_time_list)
-	{
-		lrc_time_list = cur_time_list->next;
-		free(cur_time_list);
-		cur_time_list = lrc_time_list;
-	}
+	size_t utf_len =4000;
+
+	char *plrc2 = lrc2;
+
+	convert("GB18030","UTF-8",mylrc,file_len,plrc2,utf_len);
+
+	i=0;
+
+	DEBUG_TRACE("\n before parse lrc");
+	mylyric_free_time_list();
+
 	pre_time = NULL;
 	lrcpos_left = 0;
 	lrcpos_top = 0;
@@ -961,71 +985,152 @@ static void mylyric_playback_begin(gpointer unused, gpointer unused2)
 	DEBUG_TRACE("after lrc parse");
 	if (NULL == lrc_after_parse)
 	{
-		strcpy(lrc2,"未找到歌词!\r\n");
-		lrc_after_parse = lrc2;
-		lrc_time_list = (Time_List *)malloc(sizeof(Time_List));
-		assert(NULL != lrc_time_list);
-		lrc_time_list->offset = 0;
-		lrc_time_list->len = 18;
-		lrc_time_list->time = -1;
-		lrc_time_list->line = 1;
-		lrc_time_list->next = NULL;
+		mylyric_set_one_line_lrc_content("未找到歌词!\r\n");
 	}
+	else
+	{
+		gtk_text_buffer_set_text (buffer, lrc_after_parse, -1);
 
-	gdk_color_parse(lyric_forecolor,&color);
-	gtk_widget_modify_fg(textview,GTK_STATE_NORMAL,&color);
-	gdk_color_parse(lyric_backcolor,&color);
-	gtk_widget_modify_bg(textview,GTK_STATE_NORMAL,&color);
-	gtk_widget_modify_bg(layout,GTK_STATE_NORMAL,&color);
-	//gtk_widget_modify_bg(layout,GTK_STATE_ACTIVE,&color);
-	//gtk_widget_modify_bg(layout,GTK_STATE_PRELIGHT,&color);
-	//gtk_widget_modify_bg(layout,GTK_STATE_SELECTED,&color);
-	//gtk_widget_modify_bg(layout,GTK_STATE_INSENSITIVE,&color);
-	//gtk_widget_modify_base(textview,GTK_STATE_NORMAL,&color);
-	gtk_text_buffer_set_text (buffer, lrc_after_parse, -1);
-	
-	font = pango_font_description_from_string (lyric_font);
-	strcpy(cur_font, lyric_font);
-	gtk_widget_modify_font (textview, font);
-	//gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (textview), GTK_WRAP_WORD);
-	gtk_text_view_set_justification (GTK_TEXT_VIEW (textview), GTK_JUSTIFY_CENTER);
-	gtk_text_view_set_editable (GTK_TEXT_VIEW (textview), FALSE);
-	gtk_text_view_set_cursor_visible (GTK_TEXT_VIEW (textview), FALSE);
-	gtk_text_view_set_pixels_above_lines (GTK_TEXT_VIEW (textview), 5);
-	gtk_text_view_set_pixels_below_lines (GTK_TEXT_VIEW (textview), 5);
-	gtk_text_view_set_pixels_inside_wrap (GTK_TEXT_VIEW (textview), 5);
-	gtk_text_view_set_left_margin (GTK_TEXT_VIEW (textview), 10);
-	gtk_text_view_set_right_margin (GTK_TEXT_VIEW (textview), 10);
+		scroll_lrc_timer_id = gtk_timeout_add(10, (GtkFunction)ScrollLyric,0);
+	}
+}
 
-	gtk_text_buffer_create_tag (buffer, "back","background",lyric_backcolor, NULL);
-	gtk_text_buffer_create_tag (buffer, "forecolors","foreground", lyric_focuscolor, NULL);
+static void mylyric_playback_begin(gpointer unused, gpointer unused2)
+{
+	    int pos;
+		char *current_file;
+		char *file_name, *temp;
+		FILE *fp = NULL;
+		char newname[255] = {0};
+		char lrcname[255] ={0};
+		int i=0;
+		int file_len;
+		GtkTextMark *mark;
+		GtkTextIter iter;
+		const gchar *text;
+		char *mylrc;
+		char *lrc_after_parse;
+		GdkColor color;
+		gint x,y;
+		GtkRequisition requisition;
+		PangoFontDescription *font;
+
+	    int playlist = aud_playlist_get_playing ();
+	    pos = aud_playlist_get_position (playlist);
+
+	    current_file = aud_playlist_entry_get_filename (playlist, pos);
+
+	        DEBUG_TRACE("\n============================play begin=====================n");
+		closetimer(NULL,NULL);
 
 
-	//gtk_window_get_size(GTK_WINDOW(window),&x,&y);
-	//gtk_layout_move(GTK_LAYOUT(layout),textview, 0, y/2);
-	gtk_widget_show_all(window);
-//	gtk_main ();
+		file_name = current_file + strlen(current_file) - 1;
+		while (*file_name-- != '/');
+		file_name= file_name +2;
 
-	//g_free(current_file);
+		while ('\0' != *file_name)
+		{
+			if ('%' != *file_name)
+			{
+				newname[i++] = *file_name++;
+			}
+			else
+			{
+				file_name++;
+				newname[i]= *file_name >= 'A' ? 10+*file_name-'A' : *file_name -'0';
+				newname[i] <<= 4;
+				file_name++;
+				newname[i] |= *file_name >= 'A' ? 10+*file_name-'A' : *file_name-'0';
+				file_name++;
+				i++;
+			}
+		}
+		gtk_window_set_title (GTK_WINDOW (window), newname);
 
-/*	gtk_window_set_resizable(GTK_WINDOW(window),FALSE);
+		temp = newname + strlen(newname)-1;
+		while(*temp-- != '.');
+		setbuf(stdout,NULL);
+		*(temp+1) = '\0';
+		temp = file_name;
 
-	DEBUG_TRACE("\n textview x=%d,y=%d\n",x,y);
-	gtk_widget_size_request(textview,&requisition);
-	gtk_window_resize(window,requisition.width,y);
-	GtkAllocation allocation;
-	allocation.x = 0;
-	allocation.y = 0;
-	allocation.width = requisition.width;
-	allocation.height = y;//requisition.height;
+	//	file_name = (char *)malloc(strlen(newname) + 17);
+	//	memset(file_name, 0, strlen(newname)+17);
+		strcpy(lrcname, lyric_position);
+		if (lrcname[strlen(lrcname)-1] != '/')
+		{
+			strcat(lrcname,"/");
+		}
 
-	gtk_widget_size_allocate(GTK_WIDGET(textview),&allocation);
-	gtk_window_resize(window,requisition.width,y);
-	gtk_widget_size_allocate(GTK_WIDGET(textview),&allocation);
-	gtk_window_set_resizable(GTK_WINDOW(window),TRUE);
-	
-	lrcpos = 0;*/
-	scroll_lrc_timer_id = gtk_timeout_add(10, (GtkFunction)ScrollLyric,0);
+		strcat(newname,".lrc");
+		strcat(lrcname, newname);
+
+
+		buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (textview));
+		file_len =0;
+		temp = 	NULL;
+		DEBUG_TRACE("\n========%s==================",lrcname);
+		setbuf(stdout,NULL);
+
+		fp =fopen(lrcname,"r");
+
+		if (NULL == fp)
+		{
+			printf("error open lrc file=%s\n",lrcname);
+			//if (find_lrc(lyric_position, lrcname,newname))
+			{
+			   fp =fopen(newname,"r");
+			}
+		}
+
+		//strcpy(newname, lrcname);
+		if (NULL == fp)
+		{
+		    //auto download lrc
+		    char *argv[4];
+		    char artist[100]={0},title[255]={0};
+		    temp = lrcname + strlen(lrcname) - 1;
+
+		    while ('/' != *temp && '-' != *temp)
+		        temp--;
+
+		    if ('-' == *temp)
+		    {
+		        strcpy(title, temp+1);
+		        *temp = '\0';
+
+		        while ('/' != *temp)
+		        temp--;
+
+		        strcpy(artist, temp+1);
+
+		        printf("\ntitle=%s,artist=%s\n",title,artist);
+		        temp = title + strlen(title) - 4;
+		        *temp = '\0'; //remove ".lrc"
+
+		        remove_str_blank(title);
+		        remove_str_blank(artist);
+		          printf("\ntitle=%s,artist=%s\n",title,artist);
+		    }
+		    else
+		    {
+		        strcpy(title, temp+1);
+		        temp = title + strlen(title) - 4;
+		        *temp = '\0'; //remove ".lrc"
+
+		        remove_str_blank(title);
+		    }
+		    argv[0] = "download_lrc";
+		    argv[1] = artist  ;
+		    argv[2] = title;
+		    argv[3] = newname;
+		    download_lrc(2, (char **)argv);
+		    return;
+		}
+		else
+		{
+			mylyric_play_lrc(NULL,NULL);
+		}
+
 }
 
 static void mylyric_playback_end(gpointer unused, gpointer unused2)

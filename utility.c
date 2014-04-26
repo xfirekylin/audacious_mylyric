@@ -1,4 +1,6 @@
 #include "utility.h"
+#include <locale.h>
+#include <errno.h>
 
 bool match_lrc(const char *lrc_name, const char * match_name)
 {
@@ -185,21 +187,12 @@ void unicodetostr(wchar_t *from, char *to, char hightolow)
 	while(*from != 0x0000)
 	{
 		//printf("%d:",(unsigned char)*from);
-		if(hightolow)
-		{
 			to[i++] = hex[(*from & 0xf000) >> 12];
 			to[i++] = hex[(*from & 0x0f00) >> 8];
 			to[i++] = hex[(*from & 0x00f0) >> 4];
 			to[i++] = hex[*from & 0x000f];
-		}
-		else
-		{
-			to[i++] = hex[(*from & 0x00f0) >> 4];
-			to[i++] = hex[*from & 0x000f];
-			to[i++] = hex[(*from & 0xf000) >> 12];
-			to[i++] = hex[(*from & 0x0f00) >> 8];
-		}
-		from++;
+
+			from++;
 	}
 	to[i] = '\0';
 	//#ifdef test
@@ -207,57 +200,66 @@ void unicodetostr(wchar_t *from, char *to, char hightolow)
 	//#endif
 }
 
-int convert(char *from)
+size_t convert(char *from_charset,char *to_charset,char *inbuf,size_t inlen,char *outbuf,size_t outlen)
 {
-    char *p=NULL,*frombuf=from;
-	char tobuf[MAX_PATH_LENGTH],*to=NULL;
-	iconv_t   h;
-	int size_from=0,size_to=0;
+	iconv_t cd;
+	int rc;
+	char **pin = &inbuf;
+	char **pout = &outbuf;
+	size_t  convert_len = 0;
 
-    printf("\nconvert string=%s\n",from);
-  	p=getenv("LC_CTYPE");
+	cd = iconv_open(to_charset,from_charset);
+	if (cd==0) return -1;
+	memset(outbuf,0,outlen);
+	convert_len = outlen;
+		if ((size_t)-1 == iconv(cd,pin,&inlen,pout,&outlen))
+		{
+			DEBUG_TRACE("convert error");
+			exit(1);
+		}
+	iconv_close(cd);
+	return convert_len-outlen;
+}
 
-	if ( !p ) {
-		p=getenv("LC_ALL");
-		if ( !p)
-			p=getenv("LANG");
-	}
+void UTF_8ToUnicode(wchar_t* pOut,const char *pText)
 
-	if(p){
-	 
-	 if (memcmp(p,"zh_CN.UTF-8",11)==0)
-	    { printf("\n%s\n",p);
-	      h   =   iconv_open("GB2312", "UTF-8");  
-	      if   ((iconv_t)-1   ==   h)  
-		{  
-		  perror("iconv_open");  
-		  exit(1);  
-		}  
-   
-	      size_from =   strlen(from);  
-	      size_to   =   MAX_PATH_LENGTH;
-	      to = tobuf;
-	      memset(to,0,size_to);
-	      if (-1 == iconv(h, &from, &size_from, &to, &size_to))
-		printf("\nconver error"),exit(1);  
-	      iconv_close(h);   
-	    }
-	    else
-	    	{
-	    		return 1;
-	    	}
-	} 
+{
+        char* uchar = (char *)pOut;
 
-	printf("\nconvert:");
-	int i= 0;
-	while('\0' != tobuf[i])
-	{
-	    printf("%2X",(unsigned char)tobuf[i++]);
-	    if (i%2 == 0)
-	    printf(" ");
-	}
-	printf("sizeof(to)=%d\n",strlen(tobuf));
-	
-	memcpy(frombuf,tobuf,MAX_PATH_LENGTH);
-	
+        uchar[1] = ((pText[0]&0x0F)<<4)+((pText[1]>>2)&0x0F);
+
+        uchar[0] = ((pText[1]&0x03)<<6)+(pText[2]&0x3F);
+}
+
+char* UTF_8ToGB(const char* pText,int pLen)
+{
+    char* newBuf = malloc(pLen);
+    char temp[4];
+
+    memset(newBuf,0,pLen);
+    memset(temp,0,4);
+
+    int i = 0;
+    int j = 0;
+
+    setlocale(LC_ALL,"zh_CN.gbk");
+
+    while(i < pLen)
+    {
+        if(pText[i] > 0)
+        {
+            newBuf[j++] = pText[i++];
+        }
+        else
+        {
+            wchar_t wTemp;
+            UTF_8ToUnicode(&wTemp,pText+i);
+            wcstombs(temp,&wTemp,2);
+            newBuf[j] = temp[0];
+            newBuf[j+1] = temp[1];
+            i+= 3;
+            j+= 2;
+        }
+    }
+    return newBuf;
 }

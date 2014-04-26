@@ -20,6 +20,22 @@ typedef __int64 INT64;
 	#include <netdb.h>
 	#include <sys/un.h>
 	#include <unistd.h>
+#include <glib.h>
+#include <gtk/gtk.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+#include <libxml/HTMLparser.h>
+#include <libxml/xpath.h>
+
+#include <audacious/drct.h>
+#include <audacious/i18n.h>
+#include <audacious/misc.h>
+#include <audacious/playlist.h>
+#include <audacious/plugin.h>
+#include <audacious/plugins.h>
+#include <libaudcore/audstrings.h>
+#include <libaudcore/hook.h>
+#include <libaudcore/vfs_async.h>
     typedef long long  INT64;
 #endif
 //#define test
@@ -32,7 +48,13 @@ char chbuf[FILELENGTH]={0};
 char *file=NULL;
 
 
+typedef struct {
+	char *filename; /* of song file */
+	char *title, *artist;
+	char *uri; /* URI we are trying to retrieve */
+} LyricsState;
 
+static LyricsState state;
 
 
 int parsehtml(const char *buf, const char *match, char ***presult)
@@ -143,20 +165,30 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-INT64 create_code(int Id, wchar_t *data)
+INT64 create_code(int Id, wchar_t *data1)
 {
-    INT64 length = wcslen(data);
+    INT64 length = wcslen(data1);
 	INT64 tmp2=0;
 	INT64 tmp3=0;
 	INT64 tmp7=0;
 	INT64 i;
     INT64 ch;
-	INT64 tmp1 = (Id & 0x0000FF00) >> 8;							//ÓÒÒÆ8Î»ºóÎª0x0000015F
+	INT64 tmp1 = (Id & 0x0000FF00) >> 8;							//ï¿½ï¿½ï¿½ï¿½8Î»ï¿½ï¿½Îª0x0000015F
 															//#tmp1 0x0000005F
+	char data[100];
+	char *data2 = (char *)data1;
+
+	for(i=0;i<length/2;i++)
+	{
+		data[i] = data2[i * 2] * 16 + data2[i * 2+1];
+	}
+
+	length = length / 2;
+
 	if ( (Id & 0x00FF0000) == 0 )
 		tmp3 = 0x000000FF & (~tmp1);							//#CL 0x000000E7
 	else
-		tmp3 = 0x000000FF & ((Id & 0x00FF0000) >> 16);		//#ÓÒÒÆ16Î»ºóÎª0x00000001
+		tmp3 = 0x000000FF & ((Id & 0x00FF0000) >> 16);		//#ï¿½ï¿½ï¿½ï¿½16Î»ï¿½ï¿½Îª0x00000001
 	
 	tmp3 = tmp3 | ((0x000000FF & Id) << 8);					//#tmp3 0x00001801
 	tmp3 = tmp3 << 8;										//#tmp3 0x00180100
@@ -165,7 +197,7 @@ INT64 create_code(int Id, wchar_t *data)
 	if ( (Id & 0xFF000000) == 0 )
 		tmp3 = tmp3 | (0x000000FF & (~Id));					//#tmp3 0x18015FE7
 	else 
-		tmp3 = tmp3 | (0x000000FF & (Id >> 24));			//#ÓÒÒÆ24Î»ºóÎª0x00000000
+		tmp3 = tmp3 | (0x000000FF & (Id >> 24));			//#ï¿½ï¿½ï¿½ï¿½24Î»ï¿½ï¿½Îª0x00000000
 	
 	//#tmp3	18015FE7
 	
@@ -212,7 +244,7 @@ INT64 create_code(int Id, wchar_t *data)
 	return tmp1;
 
 }
-
+static void get_lyrics_step_1(void);
 int download_lrc(int argc, char **argv)
 {
 	char *lrcbuffer;
@@ -243,7 +275,7 @@ int download_lrc(int argc, char **argv)
 	unicodetostr(artist, artistunicodestr, 0);
 	unicodetostr(title, titleunicodestr, 0);
 
-	sprintf(downhttp, "http://lrcct2.ttplayer.com/dll/lyricsvr.dll?sh?Artist=%s&Title=%s&Flags=0",
+	sprintf(downhttp, "http://ttlrcct2.ttplayer.com/dll/lyricsvr.dll?sh?Artist=%s&Title=%s&Flags=0",
 		artistunicodestr,titleunicodestr);
 	sprintf(msgbody,"Accept:image/gif,image/x-xbitmap,image/jpg,text/html,*/*\r\n"
 			"User-Agent:Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)\r\n"
@@ -265,11 +297,19 @@ int download_lrc(int argc, char **argv)
 		wcstombs(filename+strlen(filename), title, sizeof(filename)-strlen(filename));
 		strcat(filename,".lrc");
 
-	
+#if 0
+		state.filename = g_strdup(filename);
+		state.artist = g_strdup(argv[1]);
+		state.title = g_strdup(argv[2]);
+		state.uri = NULL;
+		get_lyrics_step_1();
+		return;
+#endif
+
 	temp = lrcid;
 	while(NULL != temp && NULL != *temp)
 	{
-		sprintf(downhttp, "http://lrcct2.ttplayer.com/dll/lyricsvr.dll?dl?Id=%s&Code=%lld&uid=01&mac=%012x",
+		sprintf(downhttp, "http://ttlrcct2.ttplayer.com/dll/lyricsvr.dll?dl?Id=%s&Code=%lld&uid=01&mac=%012x",
 				*temp,
 				create_code(atoi(*temp),art_title),
 				rand()
@@ -310,4 +350,156 @@ int download_lrc(int argc, char **argv)
 	return 0;
 }
 
+static void libxml_error_handler(void *ctx, const char *msg, ...)
+{
+}
+
+static char *scrape_uri_from_lyricwiki_search_result(const char *buf, int64_t len)
+{
+	xmlDocPtr doc;
+	gchar *uri = NULL;
+
+	/*
+	 * workaround buggy lyricwiki search output where it cuts the lyrics
+	 * halfway through the UTF-8 symbol resulting in invalid XML.
+	 */
+	GRegex *reg;
+
+	reg = g_regex_new("<(lyrics?)>.*</\\1>", (G_REGEX_MULTILINE | G_REGEX_DOTALL | G_REGEX_UNGREEDY), 0, NULL);
+	gchar *newbuf = g_regex_replace_literal(reg, buf, len, 0, "", G_REGEX_MATCH_NEWLINE_ANY, NULL);
+	g_regex_unref(reg);
+
+	/*
+	 * temporarily set our error-handling functor to our suppression function,
+	 * but we have to set it back because other components of Audacious depend
+	 * on libxml and we don't want to step on their code paths.
+	 *
+	 * unfortunately, libxml is anti-social and provides us with no way to get
+	 * the previous error functor, so we just have to set it back to default after
+	 * parsing and hope for the best.
+	 */
+	xmlSetGenericErrorFunc(NULL, libxml_error_handler);
+	doc = xmlParseMemory(newbuf, strlen(newbuf));
+	xmlSetGenericErrorFunc(NULL, NULL);
+
+	if (doc != NULL)
+	{
+		xmlNodePtr root, cur;
+
+		root = xmlDocGetRootElement(doc);
+
+		for (cur = root->xmlChildrenNode; cur; cur = cur->next)
+		{
+			if (xmlStrEqual(cur->name, (xmlChar *) "url"))
+			{
+				xmlChar *lyric;
+				gchar *basename;
+
+				lyric = xmlNodeGetContent(cur);
+				basename = g_path_get_basename((gchar *) lyric);
+
+				uri = str_printf("http://lyrics.wikia.com/index.php?action=edit"
+				 "&title=%s", basename);
+
+				g_free(basename);
+				xmlFree(lyric);
+			}
+		}
+
+		xmlFreeDoc(doc);
+	}
+
+	g_free(newbuf);
+
+	return uri;
+}
+
+static bool_t get_lyrics_step_3(void *buf, int64_t len, void *requri)
+{
+	FILE *fp=NULL;
+
+	if (!state.uri || strcmp(state.uri, requri))
+	{
+		free(buf);
+		str_unref(requri);
+		return FALSE;
+	}
+	str_unref(requri);
+
+	if(!len)
+	{
+		free(buf);
+		return FALSE;
+	}
+
+	DEBUG_TRACE("\n==get_lyrics_step_3=len=%d===",len);
+
+	if(NULL == fp)
+	{
+		if(NULL == (fp=fopen(state.filename,"wb")))
+		{
+			printf("can not open file %s",state.filename);
+				return 0;
+		}
+		fwrite(buf, len,1,fp);
+		free(buf);
+	}
+
+	return TRUE;
+}
+
+static bool_t get_lyrics_step_2(void *buf, int64_t len, void *requri)
+{
+	if (strcmp(state.uri, requri))
+	{
+		free(buf);
+		str_unref(requri);
+		return FALSE;
+	}
+	str_unref(requri);
+
+	if(!len)
+	{
+		free(buf);
+		return FALSE;
+	}
+
+	char *uri = scrape_uri_from_lyricwiki_search_result(buf, len);
+
+	if(!uri)
+	{
+		free(buf);
+		return FALSE;
+	}
+
+	str_unref(state.uri);
+	state.uri = uri;
+	DEBUG_TRACE("\n==get_lyrics_step_2=state.uri=%s===",state.uri);
+
+	vfs_async_file_get_contents(uri, get_lyrics_step_3, str_ref(state.uri));
+
+	free(buf);
+	return TRUE;
+}
+
+static void get_lyrics_step_1(void)
+{
+	DEBUG_TRACE("\n===artist=%s,title=%s,filename=%s===",state.artist,state.title,state.filename);
+	if(!state.artist || !state.title)
+	{
+		return;
+	}
+
+	char title_buf[strlen(state.title) * 3 + 1];
+	char artist_buf[strlen(state.artist) * 3 + 1];
+	str_encode_percent(state.title, -1, title_buf);
+	str_encode_percent(state.artist, -1, artist_buf);
+
+	str_unref(state.uri);
+	state.uri = str_printf("http://lyrics.wikia.com/api.php?action=lyrics&"
+	 "artist=%s&song=%s&fmt=xml", artist_buf, title_buf);
+
+
+	vfs_async_file_get_contents(state.uri, get_lyrics_step_2, str_ref(state.uri));
+}
 
