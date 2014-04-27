@@ -3,7 +3,7 @@
  * Copyright (c) 2005  Audacious Team
  */
 
-#include "config.h"
+//#include "config.h"
 #include "iconv.h"
 #include <glib.h>
 #include <gtk/gtk.h>
@@ -31,7 +31,6 @@
 #include <libaudcore/audstrings.h>
 #include <libaudcore/tuple.h>
 
-#include "formatter.h"
 #include "utility.h"
 
 static const PluginPreferences preferences;
@@ -79,7 +78,7 @@ static Time_List *pre_time;
 AUD_GENERAL_PLUGIN
 (
     .name = N_("My Lyric"),
-    .domain = PACKAGE,
+    .domain = N_("audacious-plugins"),
     .prefs = & preferences,
     .init = init,
     .cleanup = cleanup
@@ -159,39 +158,6 @@ static void execute_command(char *cmd)
         execv("/bin/sh", argv);
     }
 }
-
-/* Format codes:
- *
- *   F - frequency (in hertz)
- *   c - number of channels
- *   f - filename (full path)
- *   l - length (in milliseconds)
- *   n - name
- *   r - rate (in bits per second)
- *   s - name (since everyone's used to it)
- *   t - playlist position (%02d)
- *   p - currently playing (1 or 0)
- *   a - artist
- *   b - album
- *   r - track title
- */
-/* do_command(): do @cmd after replacing the format codes
-   @cmd: command to run */
-static void do_command (char * cmd)
-{
-    int playlist = aud_playlist_get_playing ();
-    int pos = aud_playlist_get_position (playlist);
-
-    char *shstring = NULL, *temp, numbuf[32];
-    gboolean playing;
-    Formatter *formatter;
-
-    if (cmd && strlen(cmd) > 0)
-    {
-        
-    }
-}
-
 
 void closetimer (GtkWidget *window, gpointer data)
 {
@@ -1140,11 +1106,9 @@ static void mylyric_playback_end(gpointer unused, gpointer unused2)
     int playlist = aud_playlist_get_playing ();
     pos = aud_playlist_get_position (playlist);
 
-    current_file = aud_playlist_entry_get_filename (playlist, pos);
+    //current_file = aud_playlist_entry_get_filename (playlist, pos);
 
-        DEBUG_TRACE("\n ============================play end=====================n");
-
-	//do_command(lyric_font, current_file, pos);
+    DEBUG_TRACE("\n ============================play end=====================n");
 
 	//g_free(current_file);
 }

@@ -17,7 +17,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define __DEBUG__
+//#define __DEBUG__
 #ifdef __DEBUG__  
     #define DEBUG_TRACE printf  
 #else  

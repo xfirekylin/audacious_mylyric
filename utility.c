@@ -71,7 +71,7 @@ bool find_lrc(const char *path, const char *lrc_name, char * match_name)
     
     if (NULL == (pdir = opendir(path)))
     {
-        printf("\nopen dir %s error", path);
+        DEBUG_TRACE("\nopen dir %s error", path);
     }
     
     for(pdirent=readdir(pdir);pdirent!=NULL;pdirent=readdir(pdir))
@@ -82,7 +82,7 @@ bool find_lrc(const char *path, const char *lrc_name, char * match_name)
         strcpy(full_path+path_len, pdirent->d_name);
         if(-1 == stat(full_path,&f_ftime))
         {
-             // printf("\nopen dir %s/%s stat file error", path,pdirent->d_name);
+             // DEBUG_TRACE("\nopen dir %s/%s stat file error", path,pdirent->d_name);
               continue;
             //return false;
         }
@@ -90,10 +90,10 @@ bool find_lrc(const char *path, const char *lrc_name, char * match_name)
         if(S_ISDIR(f_ftime.st_mode))
             continue; /*子目录跳过*/
 
-     // printf("文件:%s\n",pdirent->d_name);
+     // DEBUG_TRACE("文件:%s\n",pdirent->d_name);
       if (match_lrc(lrc_name,pdirent->d_name))
-      {printf("文件:%s\n",pdirent->d_name);
-        sprintf(match_name, "%s/%s", path, pdirent->d_name);
+      {DEBUG_TRACE("文件:%s\n",pdirent->d_name);
+        sDEBUG_TRACE(match_name, "%s/%s", path, pdirent->d_name);
         return true;
       }
     }
@@ -134,13 +134,13 @@ void savefile(char *file, int length, char *filename)
 	fp=fopen(filename,"w");
 	if(fp == NULL)
 	{
-	 	printf("\nopen error:%s\n",filename);
+	 	DEBUG_TRACE("\nopen error:%s\n",filename);
 	}
 	else
 	{
 		fwrite(file,length,1,fp);
 		fclose(fp);
-		printf("\nsave fiel %s\n",filename);
+		DEBUG_TRACE("\nsave fiel %s\n",filename);
 	}
 }
 
@@ -149,10 +149,10 @@ void urlencode(const char *from, char *to)
 	int i=0;
 	char hex[]={'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 	
-	printf("\n%s,len=%d\n",from,strlen(from));
+	DEBUG_TRACE("\n%s,len=%d\n",from,strlen(from));
 	while(*from != '\0')
 	{
-		printf("%d:",(unsigned char)*from);
+		DEBUG_TRACE("%d:",(unsigned char)*from);
 		if((unsigned char)*from < 128)
 		{
 		    if (' ' == *from)
@@ -174,7 +174,7 @@ void urlencode(const char *from, char *to)
 	}
 	to[i] = '\0';
 	//#ifdef test
-	 printf("\n%s\n",to);
+	 DEBUG_TRACE("\n%s\n",to);
 	//#endif
 }
 
@@ -183,10 +183,10 @@ void unicodetostr(wchar_t *from, char *to, char hightolow)
 	int i=0;
 	char hex[]={'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 	
-	//printf("\n%s,len=%d\n",from,strlen(from));
+	//DEBUG_TRACE("\n%s,len=%d\n",from,strlen(from));
 	while(*from != 0x0000)
 	{
-		//printf("%d:",(unsigned char)*from);
+		//DEBUG_TRACE("%d:",(unsigned char)*from);
 			to[i++] = hex[(*from & 0xf000) >> 12];
 			to[i++] = hex[(*from & 0x0f00) >> 8];
 			to[i++] = hex[(*from & 0x00f0) >> 4];
@@ -196,7 +196,7 @@ void unicodetostr(wchar_t *from, char *to, char hightolow)
 	}
 	to[i] = '\0';
 	//#ifdef test
-	 printf("\n%s\n",to);
+	 DEBUG_TRACE("\n%s\n",to);
 	//#endif
 }
 

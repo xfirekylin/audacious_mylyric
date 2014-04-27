@@ -1,4 +1,4 @@
-src =  mylyric.c formatter.h formatter.c baidu_lrc.c downloadbyhttp.c utility.c utility.h config.h
+src =  mylyric.c baidu_lrc.c utility.c utility.h
 dest =  mylyric.so
 flag = `pkg-config --cflags --libs gtk+-2.0 audacious libxml-2.0`
 cflag = -fpic -shared -DAUDACIOUS -g -Wl,--no-as-needed

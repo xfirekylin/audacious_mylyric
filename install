@@ -5,3 +5,4 @@ then
 fi
 
 cp mylyric.so /usr/lib/x86_64-linux-gnu/audacious/General/mylyric.so && echo "复制文件mylyric.so到目标"
+chmod u+s /usr/lib/x86_64-linux-gnu/audacious/General/mylyric.so 
