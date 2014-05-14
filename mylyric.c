@@ -390,6 +390,11 @@ void mylyric_set_one_line_lrc_content(char *lrc)
 	gtk_layout_move(GTK_LAYOUT(layout),textview, lrcpos_left, y/2);
 }
 
+GtkWidget * mylyric_get_window(void)
+{
+	return window;
+}
+
 void mylyric_show_window(void)
 {
 	GdkColor color;

@@ -33,6 +33,7 @@ typedef __int64 INT64;
 
 //char chbuf[FILELENGTH]={0};
 char *file=NULL;
+static bool_t download_lrc_step3(void *buf, int64_t len, void *requri);
 
 bool parsehtml(const char *buf, long int buf_len, const char *artist,const char *title, char *presult)
 {
@@ -118,6 +119,223 @@ char *g_filename = NULL;
 char *g_title = NULL;
 char *g_artist = NULL;
 
+#define MYLYRIC_MAX_URLS 5
+typedef struct {
+	gint url_cnt;
+	gchar *name[MYLYRIC_MAX_URLS];
+	gchar *artist[MYLYRIC_MAX_URLS];
+	gchar *url[MYLYRIC_MAX_URLS];
+	GtkWidget *window;
+}MYLYRIC_LRC_SELECT_T;
+
+MYLYRIC_LRC_SELECT_T mylyric_urls = {0};
+
+void mylyric_release_lrc_urls(void)
+{
+	int i = 0;
+
+	for (i=0;i<mylyric_urls.url_cnt;i++)
+	{
+		g_free(mylyric_urls.artist[i]);
+		g_free(mylyric_urls.name[i]);
+		g_free(mylyric_urls.url[i]);
+	}
+
+	if (NULL != mylyric_urls.window)
+	{
+		gtk_widget_destroy(mylyric_urls.window);
+		mylyric_urls.window = NULL;
+	}
+
+	memset (&mylyric_urls, 0, sizeof(mylyric_urls));
+}
+
+gboolean mylyric_parse_lrc_url(const char *buf, int64_t len)
+{
+	gchar *uri = NULL;
+	gchar  pattern[200] = {0};
+	gint     i = 0;
+	GRegex *reg,*reg2;
+	GMatchInfo *match_info,*match_info2;
+
+	sprintf(pattern, "<span class=\"song-title\">歌曲:.* title=\"(.*)\".*<span class=\"artist-title\">歌手:.*title=\"(.*)\".*down-lrc-btn \{ \'href\':\'(.*)\' \}\" href=\"#\">下载LRC歌词");
+	reg = g_regex_new(pattern, (G_REGEX_MULTILINE | G_REGEX_DOTALL | G_REGEX_UNGREEDY), 0, NULL);
+	  g_regex_match (reg, buf, 0, &match_info);
+	    while (g_match_info_matches (match_info))
+	    {
+	      gchar *word = g_match_info_fetch (match_info, 1);
+	      g_print ("Found: %s\n", word);
+	      mylyric_urls.name[i] = g_strdup(word);
+	      g_free (word);
+
+	      word = g_match_info_fetch (match_info, 2);
+	      g_print ("Found: %s\n", word);
+	      mylyric_urls.artist[i] = g_strdup(word);
+	      g_free (word);
+
+	      word = g_match_info_fetch (match_info, 3);
+	      g_print ("Found: %s\n", word);
+	      mylyric_urls.url[i] = g_strdup(word);
+	      g_free (word);
+
+	      i++;
+
+	      if (i >= MYLYRIC_MAX_URLS)
+	      {
+	    	  break;
+	      }
+	      g_match_info_next (match_info, NULL);
+	    }
+
+	    mylyric_urls.url_cnt = i;
+
+	  g_match_info_free (match_info);
+	  g_regex_unref(reg);
+
+	  return i > 0;
+}
+
+void mylyric_button_cancel_clicked(GtkWidget *widget,gpointer data )
+{
+	//gtk_clist_clear( (GtkCList *) data);
+	gtk_widget_destroy(mylyric_urls.window);
+	mylyric_urls.window = NULL;
+	DEBUG_TRACE("mylrric_button_cancel_clicked");
+}
+
+void mylyric_button_download_clicked(GtkWidget *widget,gpointer data )
+{
+	GtkTreeIter iter;
+	  GtkTreeModel *model;
+	  int value;
+
+	  GtkTreeSelection *select;
+
+	  select = gtk_tree_view_get_selection(GTK_TREE_VIEW(data));
+
+	  if (gtk_tree_selection_get_selected(GTK_TREE_SELECTION(select), &model, &iter))
+	  {
+
+	        gtk_tree_model_get(model, &iter, 0, &value,  -1);
+
+	        DEBUG_TRACE("mylyric_button_download_clicked select index = %d",value);
+
+	    	gchar *uri = str_printf("http://music.baidu.com%s",mylyric_urls.url[value-1]);
+	    	str_unref(g_download_url);
+	    	g_download_url = uri;
+	    	DEBUG_TRACE("\n==get_lyrics_step_2=state.uri=%s===",g_download_url);
+
+	    	mylyric_set_one_line_lrc_content("正在下载歌词。。。");
+	    	vfs_async_file_get_contents(g_download_url, download_lrc_step3, str_ref(g_download_url));
+	  }
+
+	gtk_widget_destroy(mylyric_urls.window);
+	mylyric_urls.window = NULL;
+}
+
+enum{
+col_index = 0,
+col_name ,
+col_artist,
+n_cols
+};
+
+void model_data_new(GtkTreeModel* store,gint index,
+		const gchar* name, const gchar* artist) {
+		GtkTreeIter iter;
+		gtk_list_store_append(GTK_LIST_STORE(store), &iter);
+		gtk_list_store_set(GTK_LIST_STORE(store), &iter,
+									col_index,index,
+									col_name, name,
+									col_artist, artist,
+									-1);
+}
+
+GtkTreeModel* create_model() {
+		GtkListStore *store;
+		store = gtk_list_store_new (n_cols,G_TYPE_INT,
+				G_TYPE_STRING,G_TYPE_STRING);
+		return GTK_TREE_MODEL(store);
+}
+
+void arrange_tree_view(GtkWidget* view) {
+	GtkCellRenderer* renderer;
+
+	// col 1: name
+		renderer = gtk_cell_renderer_text_new ();
+		gtk_tree_view_insert_column_with_attributes(
+				GTK_TREE_VIEW(view), -1, "序号", renderer, "text", col_index, NULL);
+
+	// col 2: name
+	renderer = gtk_cell_renderer_text_new ();
+	gtk_tree_view_insert_column_with_attributes(
+			GTK_TREE_VIEW(view), -1, "歌手", renderer, "text", col_name, NULL);
+
+	// col 3: artist
+	gtk_tree_view_insert_column_with_attributes(
+			GTK_TREE_VIEW(view), -1, "歌名", renderer, "text", col_artist, NULL);
+}
+
+
+void mylyric_open_lrc_search_result(GtkWidget *widget,gpointer data)
+{
+	GtkWidget *vbox, *hbox;
+	GtkWidget *scrolled_window, *clist,*view;
+	GtkWidget *button_download, *button_cancel;
+     gint result;
+     gint i = 0;
+
+      if (NULL != mylyric_urls.window)
+      {
+    	  gtk_widget_destroy(mylyric_urls.window);
+      }
+
+     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+     mylyric_urls.window = window;
+ 	gtk_window_set_default_size ( GTK_WINDOW(window), 300, 400);
+
+       vbox=gtk_vbox_new(FALSE, 2);
+       gtk_container_add(GTK_CONTAINER(window), vbox);
+
+       scrolled_window = gtk_scrolled_window_new (NULL, NULL);
+       gtk_box_pack_start(GTK_BOX(vbox), scrolled_window, TRUE, TRUE, 0);
+
+       view = gtk_tree_view_new();
+       gtk_container_add( GTK_CONTAINER(scrolled_window), view);
+
+       // arrange view columns
+       arrange_tree_view(view);
+
+       // set model
+       GtkTreeModel* store = create_model();
+       gtk_tree_view_set_model ( GTK_TREE_VIEW(view), store);
+       GtkTreeSelection *select;
+       select = gtk_tree_view_get_selection(GTK_TREE_VIEW(view));
+       gtk_tree_selection_set_mode(select, GTK_SELECTION_SINGLE);
+
+       for (i=0;i<mylyric_urls.url_cnt;i++)
+       {
+    	   model_data_new(store, i+1,mylyric_urls.name[i], mylyric_urls.artist[i]);
+       }
+
+       hbox = gtk_hbox_new(FALSE, 0);
+       gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, TRUE, 0);
+
+       button_download = gtk_button_new_with_label("下载");
+       button_cancel = gtk_button_new_with_label("取消");
+       gtk_box_pack_start(GTK_BOX(hbox), button_download, TRUE, TRUE, 0);
+       gtk_box_pack_start(GTK_BOX(hbox), button_cancel, TRUE, TRUE, 0);
+
+       g_signal_connect(GTK_OBJECT(button_download), "clicked",
+    		   G_CALLBACK (mylyric_button_download_clicked) ,(gpointer) view);
+
+       g_signal_connect(GTK_OBJECT(button_cancel), "clicked",
+    		   G_CALLBACK (mylyric_button_cancel_clicked) ,(gpointer) view);
+
+        gtk_widget_show_all(window);
+
+}
+
 static char *scrape_uri_from_download_search_result(const char *buf, int64_t len)
 {
 	gchar *uri = NULL;
@@ -130,39 +348,33 @@ static char *scrape_uri_from_download_search_result(const char *buf, int64_t len
 	GRegex *reg,*reg2;
 	GMatchInfo *match_info,*match_info2;
 
-	sprintf(pattern, "<span class=\"song-title\">歌曲:.* title=\"%s\".*<span class=\"artist-title\">歌手:.*title=\"%s\".*下载LRC歌词",g_title,g_artist);
+	sprintf(pattern, "<span class=\"song-title\">歌曲:.* title=\"%s\".*<span class=\"artist-title\">歌手:.*title=\"%s\".*down-lrc-btn \{ \'href\':\'(.*)\' \}\" href=\"#\">下载LRC歌词",g_title,g_artist);
 	reg = g_regex_new(pattern, (G_REGEX_MULTILINE | G_REGEX_DOTALL | G_REGEX_UNGREEDY), 0, NULL);
 	  g_regex_match (reg, buf, 0, &match_info);
 	    while (g_match_info_matches (match_info))
 	    {
-	      gchar *word = g_match_info_fetch (match_info, 0);
-	      g_print ("Found: %s\n", word);
+			gchar *word = g_match_info_fetch (match_info, 1);
+			g_print ("Found: %s\n", word);
 
-	      {
-	    	  reg2 = g_regex_new("down-lrc-btn.*\.lrc\'", (G_REGEX_MULTILINE | G_REGEX_DOTALL | G_REGEX_UNGREEDY), 0, NULL);
-	    	  	  g_regex_match (reg2, word, 0, &match_info2);
-	    	  	    while (g_match_info_matches (match_info2))
-	    	  	    {
-	    	  	      gchar *word2 = g_match_info_fetch (match_info2, 0);
-	    	  	    word2[strlen(word2)-1] = '\0';
-	    	  	      g_print ("Found: %s\n", word2);
+			uri = str_printf("http://music.baidu.com%s",word);
+			DEBUG_TRACE(uri);
+			g_free (word);
 
-	    	  	      uri = str_printf("http://music.baidu.com%s",word2+strlen("down-lrc-btn { 'href':'"));
-	    	  	      DEBUG_TRACE(uri);
-	    	  	      g_free (word2);
-	    	  	      break;
-	    	  	    }
-	    	  	  g_match_info_free (match_info2);
-	    	  	  g_regex_unref(reg2);
-	      }
-	      g_free (word);
-
-	      break;
+			break;
 	     // g_match_info_next (match_info, NULL);
 	    }
+
 	  g_match_info_free (match_info);
 	  g_regex_unref(reg);
 
+	  mylyric_release_lrc_urls();
+	  if (NULL == uri)
+	  {
+		  if (mylyric_parse_lrc_url(buf, len))
+		  {
+			  mylyric_open_lrc_search_result(NULL, NULL);
+		  }
+	  }
 	return uri;
 }
 
