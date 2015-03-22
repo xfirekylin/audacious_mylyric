@@ -269,11 +269,11 @@ void arrange_tree_view(GtkWidget* view) {
 	// col 2: name
 	renderer = gtk_cell_renderer_text_new ();
 	gtk_tree_view_insert_column_with_attributes(
-			GTK_TREE_VIEW(view), -1, "歌手", renderer, "text", col_name, NULL);
+			GTK_TREE_VIEW(view), -1, "歌手", renderer, "text", col_artist, NULL);
 
 	// col 3: artist
 	gtk_tree_view_insert_column_with_attributes(
-			GTK_TREE_VIEW(view), -1, "歌名", renderer, "text", col_artist, NULL);
+			GTK_TREE_VIEW(view), -1, "歌名", renderer, "text",  col_name, NULL);
 }
 
 
